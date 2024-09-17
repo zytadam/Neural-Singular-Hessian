@@ -1,1 +1,3 @@
 .idea
+/surface_reconstruction/log
+**/__pycache__/
