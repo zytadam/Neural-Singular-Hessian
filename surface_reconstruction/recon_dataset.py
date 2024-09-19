@@ -9,7 +9,7 @@ class ReconDataset(data.Dataset):
     # A class to generate synthetic examples of basic shapes.
     # Generates clean and noisy point clouds sampled  + samples on a grid with their distance to the surface (not used in DiGS paper)
     def __init__(self, file_path, n_points, n_samples=128, res=128, sample_type='grid', sapmling_std=0.005,
-                 requires_dist=False, requires_curvatures=False, grid_range=1.1):
+                 requires_dist=False, requires_curvatures=False, grid_range=1.5):
         self.file_path = file_path
         self.n_points = n_points
         self.n_samples = n_samples
@@ -66,9 +66,14 @@ class ReconDataset(data.Dataset):
         near_points = (manifold_points + self.sigmas[mnfld_idx] * np.random.randn(manifold_points.shape[0],
                                                                                   manifold_points.shape[1])).astype(
             np.float32)
+        
+        # Boundary point samples
+        bound_points = np.random.uniform(-self.grid_range, self.grid_range, size=(self.n_points, 2)).astype(np.float32)
+        bound_points = np.hstack([bound_points, self.grid_range*np.random.choice([-1, 1], size=self.n_points)[:,np.newaxis]]).astype(np.float32)
+        bound_points = np.apply_along_axis(np.random.permutation, axis=1, arr=bound_points).astype(np.float32)
 
         return {'points': manifold_points, 'mnfld_n': manifold_normals, 'nonmnfld_points': nonmnfld_points,
-                'near_points': near_points}
+                'near_points': bound_points}
 
     def get_train_data(self, batch_size):
         manifold_idxes_permutation = np.random.permutation(self.points.shape[0])

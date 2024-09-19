@@ -77,8 +77,9 @@ class MorseLoss(nn.Module):
         # Compute required terms
         #########################################
 
-        non_manifold_pred = output_pred["nonmanifold_pnts_pred"]
+        non_manifold_pred = output_pred["nonmanifold_pnts_pred"]    # Now inter points in test
         manifold_pred = output_pred["manifold_pnts_pred"]
+        near_pred = output_pred['near_points_pred'] # Now bounding points in test
         latent_reg = output_pred["latent_reg"]
 
         div_loss = torch.tensor([0.0], device=mnfld_points.device)
@@ -162,7 +163,42 @@ class MorseLoss(nn.Module):
         eikonal_term = eikonal_loss(None, mnfld_grad=mnfld_grad, eikonal_type='abs')
 
         # inter term
-        inter_term = torch.exp(-1e2 * torch.abs(non_manifold_pred)).mean()
+        inter_term = torch.exp(-1e2 * torch.abs(near_pred)).mean()
+
+        # smooth term
+        nonmnfld_grad = utils.gradient(nonmnfld_points, non_manifold_pred)
+        nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
+        nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
+        nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
+        nonmnfld_hessian_term = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
+        nonmnfld_hessian_norm = torch.linalg.matrix_norm(nonmnfld_hessian_term)
+
+        mnfld_grad = utils.gradient(mnfld_points, manifold_pred)
+        mnfld_dx = utils.gradient(mnfld_points, mnfld_grad[:, :, 0])
+        mnfld_dy = utils.gradient(mnfld_points, mnfld_grad[:, :, 1])
+        mnfld_dz = utils.gradient(mnfld_points, mnfld_grad[:, :, 2])
+        mnfld_hessian_term = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
+        mnfld_hessian_norm = torch.linalg.matrix_norm(mnfld_hessian_term)
+
+        smooth_term = 0.5*(torch.abs(nonmnfld_hessian_norm).mean() + torch.abs(mnfld_hessian_norm).mean())
+
+        #MVS loss
+        nonmnfld_vals, nonmnfld_vecs = torch.linalg.eigh(nonmnfld_hessian_term)
+        nonmnfld_ngrad = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
+        similarity = torch.abs(torch.einsum('bni,bnij->bnj', nonmnfld_ngrad, nonmnfld_vecs))
+        similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
+        nonmnfld_vecs = torch.gather(nonmnfld_vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
+        nonmnfld_vals = torch.gather(nonmnfld_vals, 2, sorted_indices)
+        sqrt_3 = torch.sqrt(torch.tensor(3.0))/3
+        max_sim = (similarity[:, :, 0] - sqrt_3) / (1-sqrt_3)   # value in [0,1]
+        nonmnfld_dk1 = utils.gradient(nonmnfld_points, nonmnfld_vals[:, :, 1])
+        nonmnfld_dk2 = utils.gradient(nonmnfld_points, nonmnfld_vals[:, :, 2])
+        nonmnfld_dk1de1 = torch.einsum("bni,bni->bn", nonmnfld_dk1, nonmnfld_vecs[:, :, :, 1])
+        nonmnfld_dk1de2 = torch.einsum("bni,bni->bn", nonmnfld_dk1, nonmnfld_vecs[:, :, :, 2])
+        nonmnfld_dk2de1 = torch.einsum("bni,bni->bn", nonmnfld_dk2, nonmnfld_vecs[:, :, :, 1])
+        nonmnfld_dk2de2 = torch.einsum("bni,bni->bn", nonmnfld_dk2, nonmnfld_vecs[:, :, :, 2])
+        mvs_loss = torch.mean(max_sim * (nonmnfld_dk1de1**2 + nonmnfld_dk1de2**2 + nonmnfld_dk2de1**2 + nonmnfld_dk2de2**2))
+        # print(nonmnfld_dk1de1.max(), nonmnfld_dk1de1.min())
         #########################################
         # Losses
         #########################################
@@ -212,6 +248,8 @@ class MorseLoss(nn.Module):
         elif self.loss_type == 'siren_wo_n_w_div':  # SIREN loss without normals and with divergence constraint
             loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + \
                    self.weights[4] * div_loss
+        elif self.loss_type == 'siren_test':
+            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * smooth_term + self.weights[2] * mvs_loss
         else:
             print(self.loss_type)
             raise Warning("unrecognized loss type")
@@ -221,8 +259,8 @@ class MorseLoss(nn.Module):
             loss += self.weights[6] * latent_reg_term
 
         return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
-                'eikonal_term': eikonal_term, 'normals_loss': normal_term, 'div_loss': div_loss,
-                'curv_loss': curv_term.mean(), 'morse_term': morse_loss}, mnfld_grad
+                'eikonal_term': eikonal_term, 'normals_loss': mvs_loss, 'div_loss': div_loss,
+                'curv_loss': curv_term.mean(), 'morse_term': smooth_term}, mnfld_grad
 
     def update_morse_weight(self, current_iteration, n_iterations, params=None):
         # `params`` should be (start_weight, *optional middle, end_weight) where optional middle is of the form [percent, value]*
