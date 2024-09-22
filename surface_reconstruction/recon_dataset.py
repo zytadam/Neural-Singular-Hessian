@@ -9,7 +9,7 @@ class ReconDataset(data.Dataset):
     # A class to generate synthetic examples of basic shapes.
     # Generates clean and noisy point clouds sampled  + samples on a grid with their distance to the surface (not used in DiGS paper)
     def __init__(self, file_path, n_points, n_samples=128, res=128, sample_type='grid', sapmling_std=0.005,
-                 requires_dist=False, requires_curvatures=False, grid_range=1.5):
+                 requires_dist=False, requires_curvatures=False, grid_range=1.1):
         self.file_path = file_path
         self.n_points = n_points
         self.n_samples = n_samples
