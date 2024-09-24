@@ -97,6 +97,16 @@ for epoch in range(args.num_epochs):
             except Exception as e:
                 print(e)
                 print('Could not generate mesh\n')
+        
+        net.eval()
+        # Sampling 0-isolevel
+        # uniform_samples = torch.rand(size=(num_batches, 2*train_set.n_points, 3), requires_grad=False, dtype=torch.float32).to(device)
+        # uniform_samples = 2*train_set.grid_range*uniform_samples - train_set.grid_range
+        # samples_pred = net(uniform_samples)["nonmanifold_pnts_pred"]
+        # eps = 0.02
+        # samples_pred = samples_pred[torch.abs(samples_pred) < eps]
+        
+        # print(samples_pred.shape)
 
         net.zero_grad()
         net.train()
@@ -109,6 +119,7 @@ for epoch in range(args.num_epochs):
         near_points.requires_grad_()
 
         output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
+
         loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt,
                                  near_points=near_points if args.morse_near else None)
         lr = torch.tensor(optimizer.param_groups[0]['lr'])

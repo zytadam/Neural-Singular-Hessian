@@ -63,7 +63,7 @@ def gaussian_curvature(nonmnfld_hessian_term, morse_nonmnfld_grad):
         device=device)
     zero_grad = torch.cat((morse_nonmnfld_grad[:, :, None, :], zero_grad), dim=-1)
     nonmnfld_hessian_term = torch.cat((nonmnfld_hessian_term, zero_grad), dim=-2)
-    K_G = (-1. / (morse_nonmnfld_grad.norm(dim=-1) ** 4 + 1e-12)) * torch.det(
+    K_G = (-1. / (morse_nonmnfld_grad.norm(dim=-1) ** 2 + 1e-12)) * torch.det(
         nonmnfld_hessian_term)
 
     return K_G
@@ -73,7 +73,7 @@ def mean_curvature(hessian, grad):
     GHG_T = torch.einsum('bni,bnij,bnj->bn', grad, hessian, grad)
     Trace_H = torch.einsum('bnii->bn', hessian)
     grad_norm = grad.norm(dim=-1)
-    K_M = (GHG_T - grad_norm ** 2 * Trace_H)/(2*grad_norm**3)
+    K_M = (GHG_T - grad_norm ** 2 * Trace_H)/(2*grad_norm**2)
     return K_M
 
 
@@ -211,7 +211,10 @@ class MorseLoss(nn.Module):
         K_G = gaussian_curvature(nonmnfld_hessian_term, nonmnfld_grad)
         K_M = mean_curvature(nonmnfld_hessian_term, nonmnfld_grad)
 
-        smooth_term = torch.mean(4 * K_M**2 - 2 * K_G)
+        eps = 0.02
+        mask = (torch.abs(non_manifold_pred) < eps).detach().squeeze(-1)
+        bending_eng = 4 * K_M**2 - 2 * K_G
+        smooth_term = torch.mean(bending_eng[mask]) if mask.sum()>0 else 0.
 
         #MVS loss
         # nonmnfld_vals, nonmnfld_vecs = torch.linalg.eigh(nonmnfld_hessian_term)
@@ -230,18 +233,18 @@ class MorseLoss(nn.Module):
         # nonmnfld_dk2de2 = torch.einsum("bni,bni->bn", nonmnfld_dk2, nonmnfld_vecs[:, :, :, 2])
         # mvs_loss = torch.mean(max_sim * (nonmnfld_dk1de1**2 + nonmnfld_dk1de2**2 + nonmnfld_dk2de1**2 + nonmnfld_dk2de2**2))
 
-        # dn
-        n_hat = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
-        P = torch.eye(3, device=nonmnfld_grad.device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
-        S = P @ nonmnfld_hessian_term @ P
-        vals, vecs = torch.linalg.eigh(S)
-        similarity = torch.abs(torch.einsum('bni,bnij->bnj', n_hat, vecs))
-        similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
-        vecs = torch.gather(vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
-        vals = torch.gather(vals, 2, sorted_indices)
-        sqrt_3 = torch.sqrt(torch.tensor(3.0))/3
-        max_sim = (similarity[:, :, 0] - sqrt_3) / (1-sqrt_3)   # value in [0,1]
-        print(max_sim.max(), max_sim.min(), max_sim.mean())
+        # Shape operator
+        # n_hat = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
+        # P = torch.eye(3, device=nonmnfld_grad.device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
+        # S = P @ nonmnfld_hessian_term @ P
+        # vals, vecs = torch.linalg.eigh(S)
+        # similarity = torch.abs(torch.einsum('bni,bnij->bnj', n_hat, vecs))
+        # similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
+        # vecs = torch.gather(vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
+        # vals = torch.gather(vals, 2, sorted_indices)
+        # sqrt_3 = torch.sqrt(torch.tensor(3.0))/3
+        # max_sim = (similarity[:, :, 0] - sqrt_3) / (1-sqrt_3)   # value in [0,1]
+        # print(max_sim.max(), max_sim.min(), max_sim.mean())
         #########################################
         # Losses
         #########################################
@@ -292,9 +295,9 @@ class MorseLoss(nn.Module):
             loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + \
                    self.weights[4] * div_loss
         elif self.loss_type == 'siren_test':
-            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term
+            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * smooth_term
         elif self.loss_type == 'siren_test_morse':
-            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[2] * morse_loss
+            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * morse_loss
         else:
             print(self.loss_type)
             raise Warning("unrecognized loss type")
@@ -305,7 +308,7 @@ class MorseLoss(nn.Module):
 
         return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
                 'eikonal_term': eikonal_term, 'normals_loss': normal_term, 'div_loss': div_loss,
-                'curv_loss': curv_term.mean(), 'morse_term': morse_loss}, mnfld_grad
+                'curv_loss': curv_term.mean(), 'morse_term': smooth_term}, mnfld_grad
 
     def update_morse_weight(self, current_iteration, n_iterations, params=None):
         # `params`` should be (start_weight, *optional middle, end_weight) where optional middle is of the form [percent, value]*

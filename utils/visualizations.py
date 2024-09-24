@@ -50,8 +50,8 @@ def plot_cuts_iso(decode_points_func,
                             colorscale='RdBu',
                             reversescale=True,
                             contours=dict(
-                                start=-0.05 + thres,
-                                end=0.05 + thres,
+                                start=-0.01 + thres,
+                                end=0.01 + thres,
                                 size=0.001,
                                 showlabels=True,  # show labels on contours
                                 # labelfont=dict(  # label font properties
