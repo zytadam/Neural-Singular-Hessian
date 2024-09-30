@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import utils.utils as utils
+import utils.sphericalHarmonic as SH
 
 
 def eikonal_loss(nonmnfld_grad, mnfld_grad, eikonal_type='abs'):
@@ -191,12 +192,12 @@ class MorseLoss(nn.Module):
 
         # smooth term
         # L2 Hessian
-        nonmnfld_grad = utils.gradient(nonmnfld_points, non_manifold_pred)
-        nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
-        nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
-        nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
-        nonmnfld_hessian_term = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
-        nonmnfld_hessian_norm = torch.linalg.matrix_norm(nonmnfld_hessian_term)
+        # nonmnfld_grad = utils.gradient(nonmnfld_points, non_manifold_pred)
+        # nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
+        # nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
+        # nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
+        # nonmnfld_hessian_term = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
+        # nonmnfld_hessian_norm = torch.linalg.matrix_norm(nonmnfld_hessian_term)
 
         # mnfld_grad = utils.gradient(mnfld_points, manifold_pred)
         # mnfld_dx = utils.gradient(mnfld_points, mnfld_grad[:, :, 0])
@@ -208,43 +209,52 @@ class MorseLoss(nn.Module):
         # smooth_term = 0.5*(torch.abs(nonmnfld_hessian_norm).mean() + torch.abs(mnfld_hessian_norm).mean())
 
         # Bending energy
-        K_G = gaussian_curvature(nonmnfld_hessian_term, nonmnfld_grad)
-        K_M = mean_curvature(nonmnfld_hessian_term, nonmnfld_grad)
+        # K_G = gaussian_curvature(nonmnfld_hessian_term, nonmnfld_grad)
+        # K_M = mean_curvature(nonmnfld_hessian_term, nonmnfld_grad)
 
-        eps = 0.02
-        mask = (torch.abs(non_manifold_pred) < eps).detach().squeeze(-1)
-        bending_eng = 4 * K_M**2 - 2 * K_G
-        smooth_term = torch.mean(bending_eng[mask]) if mask.sum()>0 else 0.
-
-        #MVS loss
-        # nonmnfld_vals, nonmnfld_vecs = torch.linalg.eigh(nonmnfld_hessian_term)
-        # nonmnfld_ngrad = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
-        # similarity = torch.abs(torch.einsum('bni,bnij->bnj', nonmnfld_ngrad, nonmnfld_vecs))
-        # similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
-        # nonmnfld_vecs = torch.gather(nonmnfld_vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
-        # nonmnfld_vals = torch.gather(nonmnfld_vals, 2, sorted_indices)
-        # sqrt_3 = torch.sqrt(torch.tensor(3.0))/3
-        # max_sim = (similarity[:, :, 0] - sqrt_3) / (1-sqrt_3)   # value in [0,1]
-        # nonmnfld_dk1 = utils.gradient(nonmnfld_points, nonmnfld_vals[:, :, 1])
-        # nonmnfld_dk2 = utils.gradient(nonmnfld_points, nonmnfld_vals[:, :, 2])
-        # nonmnfld_dk1de1 = torch.einsum("bni,bni->bn", nonmnfld_dk1, nonmnfld_vecs[:, :, :, 1])
-        # nonmnfld_dk1de2 = torch.einsum("bni,bni->bn", nonmnfld_dk1, nonmnfld_vecs[:, :, :, 2])
-        # nonmnfld_dk2de1 = torch.einsum("bni,bni->bn", nonmnfld_dk2, nonmnfld_vecs[:, :, :, 1])
-        # nonmnfld_dk2de2 = torch.einsum("bni,bni->bn", nonmnfld_dk2, nonmnfld_vecs[:, :, :, 2])
-        # mvs_loss = torch.mean(max_sim * (nonmnfld_dk1de1**2 + nonmnfld_dk1de2**2 + nonmnfld_dk2de1**2 + nonmnfld_dk2de2**2))
+        # eps = 0.02
+        # mask = (torch.abs(non_manifold_pred) < eps).detach().squeeze(-1)
+        # bending_eng = 4 * K_M**2 - 2 * K_G
+        # smooth_term = torch.mean(bending_eng[mask]) if mask.sum()>0 else torch.tensor(0.)
 
         # Shape operator
         # n_hat = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
+        # grad_norm = torch.norm(nonmnfld_grad, dim=2, keepdim=True) + 1e-12
         # P = torch.eye(3, device=nonmnfld_grad.device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
-        # S = P @ nonmnfld_hessian_term @ P
-        # vals, vecs = torch.linalg.eigh(S)
-        # similarity = torch.abs(torch.einsum('bni,bnij->bnj', n_hat, vecs))
+        # level_hessian_term = P @ nonmnfld_hessian_term @ P
+        # level_vals, level_vecs = torch.linalg.eigh(level_hessian_term)
+
+        # MVS loss
+        # similarity = torch.abs(torch.einsum('bni,bnij->bnj', n_hat, level_vecs))
         # similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
-        # vecs = torch.gather(vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
-        # vals = torch.gather(vals, 2, sorted_indices)
-        # sqrt_3 = torch.sqrt(torch.tensor(3.0))/3
-        # max_sim = (similarity[:, :, 0] - sqrt_3) / (1-sqrt_3)   # value in [0,1]
-        # print(max_sim.max(), max_sim.min(), max_sim.mean())
+        # level_vecs = torch.gather(level_vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
+        # level_vals = torch.gather(level_vals, 2, sorted_indices)
+        # level_dk1dp = utils.gradient(nonmnfld_points, level_vals[:, :, 1]) * grad_norm
+        # level_dk2dp = utils.gradient(nonmnfld_points, level_vals[:, :, 2]) * grad_norm
+        # level_dk1de1 = torch.einsum("bni,bni->bn", level_dk1dp, level_vecs[:, :, :, 1])
+        # level_dk1de2 = torch.einsum("bni,bni->bn", level_dk1dp, level_vecs[:, :, :, 2])
+        # level_dk2de1 = torch.einsum("bni,bni->bn", level_dk2dp, level_vecs[:, :, :, 1])
+        # level_dk2de2 = torch.einsum("bni,bni->bn", level_dk2dp, level_vecs[:, :, :, 2])
+        # mvs_loss = (level_dk1de1**2 + level_dk1de2**2 + level_dk2de1**2 + level_dk2de2**2)
+        # smooth_term = torch.mean(mvs_loss[mask]) if mask.sum()>0 else torch.tensor(0.)
+
+        # SH loss
+        # sh = SH.SphericalHarmonic(device=level_vecs.device)
+        # v = sh.as_euler_angles_batched(rotation_matrices=level_vecs)
+        # f = sh.v2f_batched(v)
+        # df0 = utils.gradient(nonmnfld_points, f[:, :, 0])
+        # df1 = utils.gradient(nonmnfld_points, f[:, :, 1])
+        # df2 = utils.gradient(nonmnfld_points, f[:, :, 2])
+        # df3 = utils.gradient(nonmnfld_points, f[:, :, 3])
+        # df4 = utils.gradient(nonmnfld_points, f[:, :, 4])
+        # df5 = utils.gradient(nonmnfld_points, f[:, :, 5])
+        # df6 = utils.gradient(nonmnfld_points, f[:, :, 6])
+        # df7 = utils.gradient(nonmnfld_points, f[:, :, 7])
+        # df8 = utils.gradient(nonmnfld_points, f[:, :, 8])
+        # df = torch.stack((df0, df1, df2, df3, df4, df5, df6, df7, df8), dim=-1) * grad_norm.unsqueeze(-1)
+        # sh_loss = torch.linalg.matrix_norm(df)**2
+        # smooth_term = torch.mean(sh_loss[mask]) if mask.sum()>0 else torch.tensor(0.)
+
         #########################################
         # Losses
         #########################################
@@ -297,7 +307,7 @@ class MorseLoss(nn.Module):
         elif self.loss_type == 'siren_test':
             loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * smooth_term
         elif self.loss_type == 'siren_test_morse':
-            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * morse_loss
+            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * morse_loss + self.weights[2] * smooth_term
         else:
             print(self.loss_type)
             raise Warning("unrecognized loss type")
@@ -307,8 +317,8 @@ class MorseLoss(nn.Module):
             loss += self.weights[6] * latent_reg_term
 
         return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
-                'eikonal_term': eikonal_term, 'normals_loss': normal_term, 'div_loss': div_loss,
-                'curv_loss': curv_term.mean(), 'morse_term': smooth_term}, mnfld_grad
+                'eikonal_term': eikonal_term, 'normals_loss': smooth_term, 'div_loss': div_loss,
+                'curv_loss': curv_term.mean(), 'morse_term': morse_loss}, mnfld_grad
 
     def update_morse_weight(self, current_iteration, n_iterations, params=None):
         # `params`` should be (start_weight, *optional middle, end_weight) where optional middle is of the form [percent, value]*

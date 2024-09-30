@@ -18,8 +18,8 @@ if __name__ == '__main__':
     init_type = 'siren'  # 'siren' | 'mfgi'
     # loss
     # loss_type = 'siren_wo_n_w_morse'
-    loss_type = 'siren_test'
-    loss_weights = (7e3, 6e2, 3, 5e1, 0, 10)
+    loss_type = 'siren_test_morse'
+    loss_weights = (7e3, 6e2, 10, 5e1, 0, 3)
     morse_type = 'l1'
     morse_decay = 'none'  # 'linear' | 'quintic' | 'step'
     decay_params = (3, 0.2, 3, 0.4, 0.001, 0.0000)

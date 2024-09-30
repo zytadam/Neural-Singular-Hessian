@@ -67,6 +67,7 @@ for epoch in range(args.num_epochs):
             output_dir = os.path.join(logdir, 'vis')
             os.makedirs(output_dir, exist_ok=True)
             vis.plot_cuts_iso(net.decoder, save_path=os.path.join(output_dir, str(batch_idx) + '.html'))
+            torch.save(net.state_dict(), os.path.join(model_outdir, str(batch_idx) + '.pth'))
             try:
                 shapename = file_name
                 output_dir = os.path.join(logdir, 'result_meshes')
