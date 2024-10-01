@@ -263,3 +263,110 @@ class MorseLoss(nn.Module):
             pass
         else:
             raise Warning("unsupported div decay value")
+
+class SuperLoss(nn.Module):
+    def __init__(self, weights=None, loss_type='siren_supervised', div_decay='none',
+                 div_type='l1', bidirectional_morse=True, udf=False):
+        super().__init__()
+        if weights is None:
+            weights = [3e3, 1e2, 1e2, 5e1, 1e2, 1e1]
+        self.weights = weights  # sdf, intern, normal, eikonal, div
+        self.loss_type = loss_type
+        self.div_decay = div_decay
+        self.div_type = div_type
+        self.use_morse = True if 'morse' in self.loss_type else False
+        self.bidirectional_morse = bidirectional_morse
+        self.udf = udf
+
+    def forward(self, output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt=None, near_points=None):
+        dims = mnfld_points.shape[-1]
+        device = mnfld_points.device
+
+        #########################################
+        # Compute required terms
+        #########################################
+
+        manifold_pred = output_pred["nonmanifold_pnts_pred"]
+        manifold_labels = output_pred["manifold_labels"].unsqueeze(-1)
+        latent_reg = output_pred["latent_reg"]
+
+        # compute gradients for div (divergence), curl and curv (curvature)
+        if manifold_pred is not None:
+            mnfld_grad = utils.gradient(mnfld_points, manifold_pred)
+        else:
+            mnfld_grad = None
+
+        div_loss = torch.tensor([0.0], device=mnfld_points.device)
+        morse_loss = torch.tensor([0.0], device=mnfld_points.device)
+        curv_term = torch.tensor([0.0], device=mnfld_points.device)
+        latent_reg_term = torch.tensor([0.0], device=mnfld_points.device)
+        normal_term = torch.tensor([0.0], device=mnfld_points.device)
+
+
+        # latent regulariation for multiple shape learning
+        latent_reg_term = latent_rg_loss(latent_reg, device)
+
+        # signed distance function term
+        criterion = torch.nn.MSELoss()
+        sdf_term = criterion(manifold_pred, manifold_labels)
+        inter_term = eikonal_term = smooth_term = torch.tensor(0.0)
+
+        #########################################
+        # Losses
+        #########################################
+
+        # losses used in the paper
+        if self.loss_type == 'siren_supervised':  # SIREN loss
+            loss = self.weights[0] * sdf_term
+
+        else:
+            print(self.loss_type)
+            raise Warning("unrecognized loss type")
+
+        # If multiple surface reconstruction, then latent and latent_reg are defined so reg_term need to be used
+        if latent_reg is not None:
+            loss += self.weights[6] * latent_reg_term
+
+        return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
+                'eikonal_term': eikonal_term, 'normals_loss': smooth_term, 'div_loss': div_loss,
+                'curv_loss': curv_term.mean(), 'morse_term': morse_loss}, mnfld_grad
+    
+    def update_morse_weight(self, current_iteration, n_iterations, params=None):
+        # `params`` should be (start_weight, *optional middle, end_weight) where optional middle is of the form [percent, value]*
+        # Thus (1e2, 0.5, 1e2 0.7 0.0, 0.0) means that the weight at [0, 0.5, 0.75, 1] of the training process, the weight should
+        #   be [1e2,1e2,0.0,0.0]. Between these points, the weights change as per the div_decay parameter, e.g. linearly, quintic, step etc.
+        #   Thus the weight stays at 1e2 from 0-0.5, decay from 1e2 to 0.0 from 0.5-0.75, and then stays at 0.0 from 0.75-1.
+
+        if not hasattr(self, 'decay_params_list'):
+            assert len(params) >= 2, params
+            assert len(params[1:-1]) % 2 == 0
+            self.decay_params_list = list(zip([params[0], *params[1:-1][1::2], params[-1]], [0, *params[1:-1][::2], 1]))
+
+        curr = current_iteration / n_iterations
+        we, e = min([tup for tup in self.decay_params_list if tup[1] >= curr], key=lambda tup: tup[1])
+        w0, s = max([tup for tup in self.decay_params_list if tup[1] <= curr], key=lambda tup: tup[1])
+
+        # Divergence term anealing functions
+        if self.div_decay == 'linear':  # linearly decrease weight from iter s to iter e
+            if current_iteration < s * n_iterations:
+                self.weights[5] = w0
+            elif current_iteration >= s * n_iterations and current_iteration < e * n_iterations:
+                self.weights[5] = w0 + (we - w0) * (current_iteration / n_iterations - s) / (e - s)
+            else:
+                self.weights[5] = we
+        elif self.div_decay == 'quintic':  # linearly decrease weight from iter s to iter e
+            if current_iteration < s * n_iterations:
+                self.weights[5] = w0
+            elif current_iteration >= s * n_iterations and current_iteration < e * n_iterations:
+                self.weights[5] = w0 + (we - w0) * (1 - (1 - (current_iteration / n_iterations - s) / (e - s)) ** 5)
+            else:
+                self.weights[5] = we
+        elif self.div_decay == 'step':  # change weight at s
+            if current_iteration < s * n_iterations:
+                self.weights[5] = w0
+            else:
+                self.weights[5] = we
+        elif self.div_decay == 'none':
+            pass
+        else:
+            raise Warning("unsupported div decay value")

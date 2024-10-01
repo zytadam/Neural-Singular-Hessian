@@ -17,8 +17,9 @@ if __name__ == '__main__':
     sphere_init_params = (1.6, 0.1)
     init_type = 'siren'  # 'siren' | 'mfgi'
     # loss
-    loss_type = 'siren_wo_n_w_morse'
-    loss_weights = (7e3, 6e2, 1e2, 5e1, 0, 3)
+    # loss_type = 'siren_wo_n_w_morse'
+    loss_type = 'siren_supervised'
+    loss_weights = (7e3, 6e2, 10, 5e1, 0, 3)
     morse_type = 'l1'
     morse_decay = 'linear'  # 'linear' | 'quintic' | 'step'
     decay_params = (3, 0.2, 3, 0.4, 0.001, 0.0001)

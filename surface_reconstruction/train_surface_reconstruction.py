@@ -7,11 +7,12 @@ import torch
 import torch.optim as optim
 from torchinfo import summary
 
-from models import Network, MorseLoss
+from models import Network, MorseLoss, SuperLoss
 import utils.utils as utils
 import utils.visualizations as vis
 import surface_recon_args
 import recon_dataset as dataset
+import super_dataset as superset
 
 # get training parameters
 args = surface_recon_args.get_args()
@@ -30,8 +31,8 @@ device = 'cpu' if not torch.cuda.is_available() else 'cuda'
 
 # get data loaders
 utils.same_seed(args.seed)
-train_set = dataset.ReconDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
-
+# train_set = dataset.ReconDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
+train_set = superset.SuperDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
 
 train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4,
                                                pin_memory=True)
@@ -52,7 +53,9 @@ print('n_iterations: ', n_iterations)
 
 net.to(device)
 
-criterion = MorseLoss(weights=args.loss_weights, loss_type=args.loss_type, div_decay=args.morse_decay,
+# criterion = MorseLoss(weights=args.loss_weights, loss_type=args.loss_type, div_decay=args.morse_decay,
+#                       div_type=args.morse_type, bidirectional_morse=args.bidirectional_morse, udf=args.udf)
+criterion = SuperLoss(weights=args.loss_weights, loss_type=args.loss_type, div_decay=args.morse_decay,
                       div_type=args.morse_type, bidirectional_morse=args.bidirectional_morse, udf=args.udf)
 
 num_batches = len(train_dataloader)
@@ -101,14 +104,16 @@ for epoch in range(args.num_epochs):
         net.zero_grad()
         net.train()
 
-        mnfld_points, mnfld_n_gt, nonmnfld_points, near_points = data['points'].to(device), data['mnfld_n'].to(device), \
-            data['nonmnfld_points'].to(device), data['near_points'].to(device)
+        mnfld_points, mnfld_n_gt, nonmnfld_points, near_points, mnfld_labels = data['points'].to(device), data['mnfld_n'].to(device), \
+            data['nonmnfld_points'].to(device), data['near_points'].to(device), data['labels'].to(device)
 
         mnfld_points.requires_grad_()
         nonmnfld_points.requires_grad_()
         near_points.requires_grad_()
 
-        output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
+        # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None, mnfld_labels=mnfld_labels)
+        output_pred = net(mnfld_points, None, near_points=None, mnfld_lbls=mnfld_labels)
+
         loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt,
                                  near_points=near_points if args.morse_near else None)
         lr = torch.tensor(optimizer.param_groups[0]['lr'])
