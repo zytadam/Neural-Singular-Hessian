@@ -265,7 +265,7 @@ class MorseLoss(nn.Module):
         # S smooth
         b,n,_,_= level_hessian_term.shape
         S = level_hessian_term.reshape((b,n,9))
-        print(S.shape)
+        # print(S.shape)
         df0 = utils.gradient(nonmnfld_points, S[:, :, 0])
         df1 = utils.gradient(nonmnfld_points, S[:, :, 1])
         df2 = utils.gradient(nonmnfld_points, S[:, :, 2])
