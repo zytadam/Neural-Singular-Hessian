@@ -225,10 +225,10 @@ class MorseLoss(nn.Module):
         level_vals, level_vecs = torch.linalg.eigh(level_hessian_term)
 
         # MVS loss
-        similarity = torch.abs(torch.einsum('bni,bnij->bnj', n_hat, level_vecs))
-        similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
-        level_vecs = torch.gather(level_vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
-        level_vals = torch.gather(level_vals, 2, sorted_indices)
+        # similarity = torch.abs(torch.einsum('bni,bnij->bnj', n_hat, level_vecs))
+        # similarity, sorted_indices = torch.sort(similarity, dim=2, descending=True)
+        # level_vecs = torch.gather(level_vecs, 3, sorted_indices.unsqueeze(2).expand(-1, -1, 3, -1))
+        # level_vals = torch.gather(level_vals, 2, sorted_indices)
         # level_dk1dp = utils.gradient(nonmnfld_points, level_vals[:, :, 1]) * grad_norm
         # level_dk2dp = utils.gradient(nonmnfld_points, level_vals[:, :, 2]) * grad_norm
         # level_dk1de1 = torch.einsum("bni,bni->bn", level_dk1dp, level_vecs[:, :, :, 1])
@@ -261,7 +261,25 @@ class MorseLoss(nn.Module):
         # sh_loss = torch.linalg.matrix_norm(df)**2
         # sh_loss = torch.linalg.norm(dfde1, dim=-1) + torch.linalg.norm(dfde2, dim=-1)
         # smooth_term = torch.mean(sh_loss[mask]) if mask.sum()>0 else torch.tensor(0.)
-        smooth_term = torch.tensor(0.0)
+
+        # S smooth
+        b,n,_,_= level_hessian_term.shape
+        S = level_hessian_term.reshape((b,n,9))
+        print(S.shape)
+        df0 = utils.gradient(nonmnfld_points, S[:, :, 0])
+        df1 = utils.gradient(nonmnfld_points, S[:, :, 1])
+        df2 = utils.gradient(nonmnfld_points, S[:, :, 2])
+        df3 = utils.gradient(nonmnfld_points, S[:, :, 3])
+        df4 = utils.gradient(nonmnfld_points, S[:, :, 4])
+        df5 = utils.gradient(nonmnfld_points, S[:, :, 5])
+        df6 = utils.gradient(nonmnfld_points, S[:, :, 6])
+        df7 = utils.gradient(nonmnfld_points, S[:, :, 7])
+        df8 = utils.gradient(nonmnfld_points, S[:, :, 8])
+        df = torch.stack((df0, df1, df2, df3, df4, df5, df6, df7, df8), dim=-1) * grad_norm.unsqueeze(-1)
+        S_loss = torch.linalg.matrix_norm(df)
+        smooth_term = torch.mean(S_loss[mask]) if mask.sum()>0 else torch.tensor(0.)
+
+        # smooth_term = torch.tensor(0.0)
         #########################################
         # Losses
         #########################################
