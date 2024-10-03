@@ -55,7 +55,7 @@ class SuperDataset(data.Dataset):
         return
 
     def __getitem__(self, index):
-        manifold_points, manifold_labels = self.get_cylinder_points(n=3)
+        manifold_points, manifold_labels = self.get_cylinder_points(n=5)
 
         nonmnfld_points = manifold_points
         near_points = manifold_points

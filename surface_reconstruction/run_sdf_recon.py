@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     # data process
     n_points = 15000  # points number
-    n_samples = 10000  # iterations number
+    n_samples = 20000  # iterations number
     batch_size = 1
     grid_res = 256  # mc resolution
     # network
