@@ -39,6 +39,10 @@ train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_
 net = Network(in_dim=3, decoder_hidden_dim=args.decoder_hidden_dim, nl=args.nl,
               decoder_n_hidden_layers=args.decoder_n_hidden_layers, init_type=args.init_type,
               sphere_init_params=args.sphere_init_params, udf=args.udf)
+
+# Load supervised network
+net.load_state_dict(torch.load(os.path.join(args.logdir, "cylinder_surf_supervised", "trained_models", "9999.pth")))
+
 net.to(device)
 summary(net.decoder, (1, 1024, 3))
 
@@ -63,11 +67,11 @@ max_f1 = -np.inf
 for epoch in range(args.num_epochs):
     # For each batch in the dataloader
     for batch_idx, data in enumerate(train_dataloader):
-        if batch_idx != 0 and (batch_idx % 500 == 0 or batch_idx == len(train_dataloader) - 1):
+        if batch_idx != 0 and (batch_idx % 1 == 0 or batch_idx == len(train_dataloader) - 1):
             output_dir = os.path.join(logdir, 'vis')
             os.makedirs(output_dir, exist_ok=True)
             vis.plot_cuts_iso(net.decoder, save_path=os.path.join(output_dir, str(batch_idx) + '.html'))
-            torch.save(net.state_dict(), os.path.join(model_outdir, str(batch_idx) + '.pth'))
+            # torch.save(net.state_dict(), os.path.join(model_outdir, str(batch_idx) + '.pth'))
             try:
                 shapename = file_name
                 output_dir = os.path.join(logdir, 'result_meshes')

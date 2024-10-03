@@ -24,6 +24,7 @@ if __name__ == "__main__":
     b = 1
     n = 1
     p = 2 * torch.rand(n, 3) - 1
+    # p =torch.tensor([[-0.4767,  0.5760, -0.6999]])
     p.requires_grad = True
     v = func(p)
 
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     # mvs_loss = (level_dk1de1**2 + level_dk1de2**2 + level_dk2de1**2 + level_dk2de2**2)
 
     # print(mvs_loss.min().item(), mvs_loss.max().item(), mvs_loss.mean().item())
-    sh = SH.SphericalHarmonic()
+    sh = SH.SphericalHarmonic(p.device)
     for i in range(n):
         eigvecs = level_vecs[0]
         print(eigvecs)
@@ -67,8 +68,8 @@ if __name__ == "__main__":
         df_6 = gradient(p, f[6]).squeeze(0)
         df_7 = gradient(p, f[7]).squeeze(0)
         df_8 = gradient(p, f[8]).squeeze(0)
-        df = torch.stack((df_0, df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8), dim=0)
+        df = torch.stack((df_0, df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8), dim=1)
         print(df)
 
     p = p.unsqueeze(0)
-    print(p.shape)
+    print(p)
