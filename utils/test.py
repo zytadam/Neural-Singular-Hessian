@@ -16,15 +16,19 @@ def gradient(inputs, outputs, create_graph=True, retain_graph=True):
     return points_grad
 
 # input (n,3)
+# def func(p):
+#     v = p[:,0]**2 + p[:,1]**2 + p[:,2]**2
+#     return v
+
 def func(p):
-    v = p[:,0]**2 + p[:,1]**2 + p[:,2]**2
+    v = p[:,0]**1.00001 + p[:,1] + p[:,2]
     return v
 
 if __name__ == "__main__":
     b = 1
     n = 1
     p = 2 * torch.rand(n, 3) - 1
-    # p =torch.tensor([[-0.4767,  0.5760, -0.6999]])
+    p =torch.tensor([[0.4767,  0.5760, -0.6999]])
     p.requires_grad = True
     v = func(p)
 
@@ -34,9 +38,10 @@ if __name__ == "__main__":
     g_dz = gradient(p, g[:, 2])
     h = torch.stack((g_dx, g_dy, g_dz), dim=-1)
     g_hat = torch.nn.functional.normalize(g, dim=-1)
+    print(g)
     P = torch.eye(3).unsqueeze(0) - g_hat.unsqueeze(-1) * g_hat.unsqueeze(-2)
     S = P @ h @ P
-    level_vals, level_vecs = torch.linalg.eigh(S)
+    # level_vals, level_vecs = torch.linalg.eigh(S)
     # similarity = torch.abs(torch.einsum('ni,nij->nj', g_hat, level_vecs))
     # similarity, sorted_indices = torch.sort(similarity, dim=1, descending=True)
 
@@ -51,13 +56,30 @@ if __name__ == "__main__":
     # mvs_loss = (level_dk1de1**2 + level_dk1de2**2 + level_dk2de1**2 + level_dk2de2**2)
 
     # print(mvs_loss.min().item(), mvs_loss.max().item(), mvs_loss.mean().item())
-    sh = SH.SphericalHarmonic(p.device)
+    # sh = SH.SphericalHarmonic(p.device)
+    # for i in range(n):
+    #     eigvecs = level_vecs[0]
+    #     print(eigvecs)
+    #     v = sh.as_euler_angles(eigvecs)
+    #     print(v)
+    #     f = sh.v2f(v)
+    #     print(f)
+    #     df_0 = gradient(p, f[0]).squeeze(0)
+    #     df_1 = gradient(p, f[1]).squeeze(0)
+    #     df_2 = gradient(p, f[2]).squeeze(0)
+    #     df_3 = gradient(p, f[3]).squeeze(0)
+    #     df_4 = gradient(p, f[4]).squeeze(0)
+    #     df_5 = gradient(p, f[5]).squeeze(0)
+    #     df_6 = gradient(p, f[6]).squeeze(0)
+    #     df_7 = gradient(p, f[7]).squeeze(0)
+    #     df_8 = gradient(p, f[8]).squeeze(0)
+    #     df = torch.stack((df_0, df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8), dim=1)
+    #     print(df)
+
+    # p = p.unsqueeze(0)
+    # print(p)
     for i in range(n):
-        eigvecs = level_vecs[0]
-        print(eigvecs)
-        v = sh.as_euler_angles(eigvecs)
-        print(v)
-        f = sh.v2f(v)
+        f = S[i].view((9))
         print(f)
         df_0 = gradient(p, f[0]).squeeze(0)
         df_1 = gradient(p, f[1]).squeeze(0)
@@ -69,7 +91,4 @@ if __name__ == "__main__":
         df_7 = gradient(p, f[7]).squeeze(0)
         df_8 = gradient(p, f[8]).squeeze(0)
         df = torch.stack((df_0, df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8), dim=1)
-        print(df)
-
-    p = p.unsqueeze(0)
-    print(p)
+        print(torch.linalg.matrix_norm(df))

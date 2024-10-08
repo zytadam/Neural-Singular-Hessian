@@ -188,16 +188,16 @@ class MorseLoss(nn.Module):
         eikonal_term = eikonal_loss(nonmnfld_grad=None, mnfld_grad=mnfld_grad, eikonal_type='abs')
 
         # inter term
-        inter_term = torch.exp(-1e2 * torch.abs(near_pred)).mean()
+        inter_term = torch.exp(-1e2 * torch.abs(non_manifold_pred)).mean()
 
         # smooth term
         # L2 Hessian
-        nonmnfld_grad = utils.gradient(nonmnfld_points, non_manifold_pred)
-        nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
-        nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
-        nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
-        nonmnfld_hessian_term = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
-        nonmnfld_hessian_norm = torch.linalg.matrix_norm(nonmnfld_hessian_term)
+        # nonmnfld_grad = utils.gradient(nonmnfld_points, non_manifold_pred)
+        # nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
+        # nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
+        # nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
+        # nonmnfld_hessian_term = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
+        # nonmnfld_hessian_norm = torch.linalg.matrix_norm(nonmnfld_hessian_term)
 
         # mnfld_grad = utils.gradient(mnfld_points, manifold_pred)
         # mnfld_dx = utils.gradient(mnfld_points, mnfld_grad[:, :, 0])
@@ -218,10 +218,26 @@ class MorseLoss(nn.Module):
         # smooth_term = torch.mean(bending_eng[mask]) if mask.sum()>0 else torch.tensor(0.)
 
         # Shape operator
-        n_hat = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
-        grad_norm = torch.norm(nonmnfld_grad, dim=2, keepdim=True) + 1e-12
+        # n_hat = torch.nn.functional.normalize(nonmnfld_grad, dim=-1)
+        # grad_norm = torch.norm(nonmnfld_grad, dim=2, keepdim=True) + 1e-12
+        # P = torch.eye(3, device=nonmnfld_grad.device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
+        # level_hessian_term = P @ nonmnfld_hessian_term @ P
+        # level_vals, level_vecs = torch.linalg.eigh(level_hessian_term)
+
+        # Averaged shape tensors
+        n = non_manifold_pred.shape[1]
+        m = near_pred.shape[1] // n
+        avg_pred = near_pred.view((1, n, m)).mean(dim=2).unsqueeze(-1)
+        avg_grad = utils.gradient(nonmnfld_points, avg_pred)
+        avg_dx = utils.gradient(nonmnfld_points, avg_grad[:, :, 0])
+        avg_dy = utils.gradient(nonmnfld_points, avg_grad[:, :, 1])
+        avg_dz = utils.gradient(nonmnfld_points, avg_grad[:, :, 2])
+        level_hessian_term = torch.stack((avg_dx, avg_dy, avg_dz), dim=-1)
+
+        n_hat = torch.nn.functional.normalize(avg_grad, dim=-1)
+        grad_norm = torch.norm(avg_grad, dim=2, keepdim=True) + 1e-12
         P = torch.eye(3, device=nonmnfld_grad.device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
-        level_hessian_term = P @ nonmnfld_hessian_term @ P
+        level_hessian_term = P @ level_hessian_term @ P
         level_vals, level_vecs = torch.linalg.eigh(level_hessian_term)
 
         # MVS loss
@@ -265,7 +281,6 @@ class MorseLoss(nn.Module):
         # S smooth
         b,n,_,_= level_hessian_term.shape
         S = level_hessian_term.reshape((b,n,9))
-        # print(S.shape)
         df0 = utils.gradient(nonmnfld_points, S[:, :, 0])
         df1 = utils.gradient(nonmnfld_points, S[:, :, 1])
         df2 = utils.gradient(nonmnfld_points, S[:, :, 2])
@@ -330,7 +345,7 @@ class MorseLoss(nn.Module):
             loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + \
                    self.weights[4] * div_loss
         elif self.loss_type == 'siren_test':
-            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * smooth_term
+            loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[2] * smooth_term
         elif self.loss_type == 'siren_test_morse':
             loss = self.weights[0] * sdf_term + self.weights[1] * inter_term + self.weights[3] * eikonal_term + self.weights[5] * morse_loss + self.weights[2] * smooth_term
         else:

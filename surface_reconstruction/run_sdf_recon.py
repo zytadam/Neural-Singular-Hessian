@@ -7,7 +7,7 @@ if __name__ == '__main__':
     logdir = './log/sdf'
 
     # data process
-    n_points = 15000  # points number
+    n_points = 1500  # points number
     n_samples = 20  # iterations number
     batch_size = 1
     grid_res = 256  # mc resolution
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # loss_type = 'siren_wo_n_w_morse'
     loss_type = 'siren_test'
     # loss_weights = (7e3, 6e2, 0.1, 5e1, 0, 3)
-    loss_weights = (7e3, 0, 0.1, 5e1, 0, 3)
+    loss_weights = (0, 0, 0.01, 0, 0, 0)
     morse_type = 'l1'
     morse_decay = 'none'  # 'linear' | 'quintic' | 'step'
     decay_params = (3, 0.2, 3, 0.4, 0.001, 0.0000)

@@ -792,6 +792,27 @@ def count_parameters(model):
     # count the number of parameters in a given model
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+def sample_gaussian_around_points(points, m, std_dev=0.1):
+    # Get the number of points (n)
+    b, n, _ = points.shape
+    
+    # Generate deviations from a Gaussian distribution
+    deviations = torch.randn((b, n, m, 3), device=points.device) * std_dev  # Shape (n, m, 3)
+    
+    # Repeat the original points m times to add deviations to them
+    repeated_points = points.unsqueeze(2).repeat(1, 1, m, 1)  # Shape (n, m, 3)
+    
+    # Compute the new points by adding the deviations to the repeated original points
+    sampled_points = repeated_points + deviations  # Shape (n, m, 3)
+    
+    # Concatenate the original points with their sampled points along the second dimension
+    result = torch.cat([points.unsqueeze(2), sampled_points], dim=2)  # Shape (n, m+1, 3)
+    
+    # Reshape the result to (n*(m+1), 3)
+    result = result.view(b, n * (m + 1), 3)
+    
+    return result
+
 
 if __name__ == "__main__":
     file_path = '/home/sitzikbs/Datasets/Reconstruction_IKEA_sample/interior_room.xyz'
