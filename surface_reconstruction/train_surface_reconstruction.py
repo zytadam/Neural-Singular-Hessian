@@ -50,7 +50,8 @@ n_parameters = utils.count_parameters(net)
 utils.log_string("Number of parameters in the current model:{}".format(n_parameters), log_file)
 
 # Setup Adam optimizers
-optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=0.0)
+# optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=0.0)
+optimizer = optim.LBFGS(net.parameters(), lr=args.lr, line_search_fn="strong_wolfe")
 n_iterations = args.n_samples * (args.num_epochs)
 print('n_iterations: ', n_iterations)
 
@@ -113,35 +114,83 @@ for epoch in range(args.num_epochs):
         
         # print(samples_pred.shape)
 
-        net.zero_grad()
-        net.train()
-
         mnfld_points, mnfld_n_gt, nonmnfld_points, near_points = data['points'].to(device), data['mnfld_n'].to(device), \
             data['nonmnfld_points'].to(device), data['near_points'].to(device)
 
+        
+        # Sampling 0 iso-surface
+        num = 1000
+        eps = 0.02
+        with torch.no_grad():
+            sample_list = []
+            sample_number = 0
+            
+            while sample_number < num:
+                points = 2.2 * torch.rand(num, 3, device=device) - 1.1
+                preds = net(points)["nonmanifold_pnts_pred"]
+                mask = torch.abs(preds).squeeze(-1) < eps
+                samples = points[mask]
+                sample_list.append(samples)
+                sample_number += samples.shape[0]
+
+            s_points = torch.cat(sample_list, dim=0)[:num].unsqueeze(0)
+            nonmnfld_points = s_points
+        
         mnfld_points.requires_grad_()
         nonmnfld_points.requires_grad_()
         # near_points.requires_grad_()
-        near_points = utils.sample_gaussian_around_points(nonmnfld_points, 10, std_dev=0.04)
-        # print(near_points.shape)
+        near_points = utils.sample_gaussian_around_points(nonmnfld_points, 15, std_dev=0.04)
+        
 
-        output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
+        net.zero_grad()
+        net.train()
 
-        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt,
-                                 near_points=near_points if args.morse_near else None)
-        lr = torch.tensor(optimizer.param_groups[0]['lr'])
-        loss_dict["lr"] = lr
-        utils.log_losses(log_writer_train, epoch, batch_idx, num_batches, loss_dict, args.batch_size)
+        # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
 
-        loss_dict["loss"].backward()
+        # loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt,
+        #                          near_points=near_points if args.morse_near else None)
+        # lr = torch.tensor(optimizer.param_groups[0]['lr'])
+        # loss_dict["lr"] = lr
+        # utils.log_losses(log_writer_train, epoch, batch_idx, num_batches, loss_dict, args.batch_size)
 
-        if args.grad_clip_norm > 0:
-            torch.nn.utils.clip_grad_norm_(net.parameters(), args.grad_clip_norm)
+        # loss_dict["loss"].backward()
 
-        optimizer.step()
+        # if args.grad_clip_norm > 0:
+        #     torch.nn.utils.clip_grad_norm_(net.parameters(), args.grad_clip_norm)
+
+        # optimizer.step()
+
+
+        # Closure for line search optimizer
+        # Store original parameter values before the update
+        original_params = [param.clone() for param in net.parameters()]
+
+        lr = torch.tensor(0.)
+        loss_dict = {}
+        def closure():
+            global lr, loss_dict
+            optimizer.zero_grad()
+            output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
+
+            loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt,
+                                    near_points=near_points if args.morse_near else None)
+            lr = torch.tensor(optimizer.param_groups[0]['lr'])
+            loss_dict["lr"] = lr
+            utils.log_losses(log_writer_train, epoch, batch_idx, num_batches, loss_dict, args.batch_size)
+
+            loss_dict["loss"].backward()
+
+            if args.grad_clip_norm > 0:
+                torch.nn.utils.clip_grad_norm_(net.parameters(), args.grad_clip_norm)
+
+            return loss_dict["loss"]
+
+        optimizer.step(closure)
+        total_change = torch.sqrt(sum(torch.sum((param - orig_param) ** 2) for param, orig_param in zip(net.parameters(), original_params)))
+        print(total_change)
 
         # Output training stats
-        if batch_idx % 10 == 0:
+        if batch_idx % 1 == 0:
             weights = criterion.weights
             utils.log_string("Weights: {}, lr={:.3e}".format(weights, lr), log_file)
             utils.log_string('Epoch: {} [{:4d}/{} ({:.0f}%)] Loss: {:.5f} = L_Mnfld: {:.5f} + '
