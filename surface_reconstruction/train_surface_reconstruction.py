@@ -31,11 +31,7 @@ device = 'cpu' if not torch.cuda.is_available() else 'cuda'
 
 # get data loaders
 utils.same_seed(args.seed)
-# train_set = dataset.ReconDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
-train_set = superset.SuperDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
 
-train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0,
-                                               pin_memory=True)
 # get model
 net = Network(in_dim=3, decoder_hidden_dim=args.decoder_hidden_dim, nl=args.nl,
               decoder_n_hidden_layers=args.decoder_n_hidden_layers, init_type=args.init_type,
@@ -43,6 +39,13 @@ net = Network(in_dim=3, decoder_hidden_dim=args.decoder_hidden_dim, nl=args.nl,
 net.load_state_dict(torch.load(os.path.join(args.logdir, 'cylinder_surf_sup_10avgS_0.01', 'trained_models', '5.pth')))
 net.to(device)
 summary(net.decoder, (1, 1024, 3))
+
+# train_set = dataset.ReconDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
+train_set = superset.SuperDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
+train_set.set_model(net)
+
+train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0,
+                                               pin_memory=True)
 
 n_parameters = utils.count_parameters(net)
 utils.log_string("Number of parameters in the current model:{}".format(n_parameters), log_file)
@@ -103,8 +106,7 @@ for epoch in range(args.num_epochs):
                 print(e)
                 print('Could not generate mesh\n')
 
-        net.zero_grad()
-        net.train()
+        
 
         mnfld_points, mnfld_n_gt, nonmnfld_points, near_points, mnfld_labels, mnfld_h_gt = data['points'].to(device), data['mnfld_n'].to(device), \
             data['nonmnfld_points'].to(device), data['near_points'].to(device), data['labels'].to(device), data['mnfld_h'].to(device)
@@ -112,6 +114,9 @@ for epoch in range(args.num_epochs):
         mnfld_points.requires_grad_()
         nonmnfld_points.requires_grad_()
         near_points.requires_grad_()
+
+        net.zero_grad()
+        net.train()
 
         # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None, mnfld_labels=mnfld_labels)
         output_pred = net(mnfld_points, None, near_points=None)

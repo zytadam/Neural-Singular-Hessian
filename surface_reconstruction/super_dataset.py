@@ -173,15 +173,15 @@ class SuperDataset(data.Dataset):
             S = P @ hessians @ P
 
             S = S.reshape((-1,9))
-            dS0 = utils.gradient(points, S[:, :, 0])
-            dS1 = utils.gradient(points, S[:, :, 1])
-            dS2 = utils.gradient(points, S[:, :, 2])
-            dS3 = utils.gradient(points, S[:, :, 3])
-            dS4 = utils.gradient(points, S[:, :, 4])
-            dS5 = utils.gradient(points, S[:, :, 5])
-            dS6 = utils.gradient(points, S[:, :, 6])
-            dS7 = utils.gradient(points, S[:, :, 7])
-            dS8 = utils.gradient(points, S[:, :, 8])
+            dS0 = utils.gradient(points, S[:, 0])
+            dS1 = utils.gradient(points, S[:, 1])
+            dS2 = utils.gradient(points, S[:, 2])
+            dS3 = utils.gradient(points, S[:, 3])
+            dS4 = utils.gradient(points, S[:, 4])
+            dS5 = utils.gradient(points, S[:, 5])
+            dS6 = utils.gradient(points, S[:, 6])
+            dS7 = utils.gradient(points, S[:, 7])
+            dS8 = utils.gradient(points, S[:, 8])
             dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
 
             return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), dS.detach().numpy()
@@ -199,3 +199,9 @@ class SuperDataset(data.Dataset):
         return points, values, normals, hessians
     def __len__(self):
         return self.n_samples
+    
+    def set_model(self, model):
+        self.model = model
+
+    def sample_isosurface(self, n):
+        pass
