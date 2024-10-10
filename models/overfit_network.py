@@ -138,7 +138,7 @@ class Network(nn.Module):
                                         outermost_linear=True, nonlinearity=nl, init_type=init_type,
                                         sphere_init_params=sphere_init_params)  # SIREN decoder
 
-    def forward(self, non_mnfld_pnts, mnfld_pnts=None, near_points=None, mnfld_lbls=None, only_nonmnfld=False, latent=None):
+    def forward(self, non_mnfld_pnts, mnfld_pnts=None, near_points=None, only_nonmnfld=False, latent=None):
         batch_size = non_mnfld_pnts.shape[0]
         if self.latent_size > 0 and self.encoder is not None:
             # encoder
@@ -171,7 +171,6 @@ class Network(nn.Module):
                 "nonmanifold_pnts_pred": nonmanifold_pnts_pred,
                 'near_points_pred': near_points_pred,
                 "latent_reg": latent_reg,
-                "manifold_labels": mnfld_lbls
                 }
 
     def get_latent_mods(self, mnfld_pnts=None, latent=None, rand_predict=True):

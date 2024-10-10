@@ -278,7 +278,7 @@ class SuperLoss(nn.Module):
         self.bidirectional_morse = bidirectional_morse
         self.udf = udf
 
-    def forward(self, output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt=None, near_points=None):
+    def forward(self, output_pred, mnfld_points, nonmnfld_points, mnfld_gt=None, mnfld_n_gt=None, mnfld_h_gt=None, near_points=None):
         dims = mnfld_points.shape[-1]
         device = mnfld_points.device
 
@@ -287,7 +287,6 @@ class SuperLoss(nn.Module):
         #########################################
 
         manifold_pred = output_pred["nonmanifold_pnts_pred"]
-        manifold_labels = output_pred["manifold_labels"].unsqueeze(-1)
         latent_reg = output_pred["latent_reg"]
 
         # compute gradients for div (divergence), curl and curv (curvature)
@@ -301,14 +300,28 @@ class SuperLoss(nn.Module):
         curv_term = torch.tensor([0.0], device=mnfld_points.device)
         latent_reg_term = torch.tensor([0.0], device=mnfld_points.device)
         normal_term = torch.tensor([0.0], device=mnfld_points.device)
-
+        hessian_term = torch.tensor([0.0], device=mnfld_points.device)
 
         # latent regulariation for multiple shape learning
         latent_reg_term = latent_rg_loss(latent_reg, device)
 
         # signed distance function term
-        criterion = torch.nn.MSELoss()
-        sdf_term = criterion(manifold_pred, manifold_labels)
+        sdf_term = torch.nn.MSELoss()(manifold_pred, mnfld_gt)
+
+        # normal term
+        if mnfld_n_gt is not None:
+            normal_term = ((mnfld_grad - mnfld_n_gt).abs()).norm(2, dim=-1).mean()
+            # normal_term = (
+            #         1 - torch.abs(torch.nn.functional.cosine_similarity(mnfld_grad, mnfld_n_gt, dim=-1))).mean()
+
+        if mnfld_h_gt is not None:
+            mnfld_dx = utils.gradient(mnfld_points, mnfld_grad[:, :, 0])
+            mnfld_dy = utils.gradient(mnfld_points, mnfld_grad[:, :, 1])
+            mnfld_dz = utils.gradient(mnfld_points, mnfld_grad[:, :, 2])
+            mnfld_hessian = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
+            hessian_term = torch.linalg.matrix_norm(mnfld_hessian - mnfld_h_gt).mean()
+            # print(hessian_term)
+
         inter_term = eikonal_term = smooth_term = torch.tensor(0.0)
 
         #########################################
@@ -316,19 +329,21 @@ class SuperLoss(nn.Module):
         #########################################
 
         # losses used in the paper
-        if self.loss_type == 'siren_supervised':  # SIREN loss
-            loss = self.weights[0] * sdf_term
-
-        else:
-            print(self.loss_type)
-            raise Warning("unrecognized loss type")
+        # if self.loss_type == 'siren_supervised':  # SIREN loss
+        #     loss = self.weights[0] * sdf_term
+        # if self.loss_type == 'siren_supervised_normal':  # SIREN loss
+        #     loss = self.weights[0] * sdf_term + self.weights[1] * normal_term
+        # else:
+        #     print(self.loss_type)
+        #     raise Warning("unrecognized loss type")
+        loss = self.weights[0] * sdf_term + self.weights[1] * normal_term + self.weights[2] * hessian_term
 
         # If multiple surface reconstruction, then latent and latent_reg are defined so reg_term need to be used
         if latent_reg is not None:
             loss += self.weights[6] * latent_reg_term
 
         return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
-                'eikonal_term': eikonal_term, 'normals_loss': smooth_term, 'div_loss': div_loss,
+                'eikonal_term': eikonal_term, 'normals_loss': hessian_term, 'div_loss': div_loss,
                 'curv_loss': curv_term.mean(), 'morse_term': morse_loss}, mnfld_grad
     
     def update_morse_weight(self, current_iteration, n_iterations, params=None):

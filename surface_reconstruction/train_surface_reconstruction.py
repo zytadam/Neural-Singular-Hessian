@@ -34,12 +34,13 @@ utils.same_seed(args.seed)
 # train_set = dataset.ReconDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
 train_set = superset.SuperDataset(args.data_path, args.n_points, args.n_samples, args.grid_res)
 
-train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4,
+train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0,
                                                pin_memory=True)
 # get model
 net = Network(in_dim=3, decoder_hidden_dim=args.decoder_hidden_dim, nl=args.nl,
               decoder_n_hidden_layers=args.decoder_n_hidden_layers, init_type=args.init_type,
               sphere_init_params=args.sphere_init_params, udf=args.udf)
+net.load_state_dict(torch.load(os.path.join(args.logdir, 'cylinder_surf_sup_10avgS_0.01', 'trained_models', '5.pth')))
 net.to(device)
 summary(net.decoder, (1, 1024, 3))
 
@@ -66,7 +67,7 @@ max_f1 = -np.inf
 for epoch in range(args.num_epochs):
     # For each batch in the dataloader
     for batch_idx, data in enumerate(train_dataloader):
-        if batch_idx != 0 and (batch_idx % 1000 == 0 or batch_idx == len(train_dataloader) - 1):
+        if (batch_idx % 5 == 0 or batch_idx == len(train_dataloader) - 1):
             output_dir = os.path.join(logdir, 'vis')
             os.makedirs(output_dir, exist_ok=True)
             vis.plot_cuts_iso(net.decoder, save_path=os.path.join(output_dir, str(batch_idx) + '.html'))
@@ -105,17 +106,17 @@ for epoch in range(args.num_epochs):
         net.zero_grad()
         net.train()
 
-        mnfld_points, mnfld_n_gt, nonmnfld_points, near_points, mnfld_labels = data['points'].to(device), data['mnfld_n'].to(device), \
-            data['nonmnfld_points'].to(device), data['near_points'].to(device), data['labels'].to(device)
-
+        mnfld_points, mnfld_n_gt, nonmnfld_points, near_points, mnfld_labels, mnfld_h_gt = data['points'].to(device), data['mnfld_n'].to(device), \
+            data['nonmnfld_points'].to(device), data['near_points'].to(device), data['labels'].to(device), data['mnfld_h'].to(device)
+        # print(mnfld_h_gt.shape)
         mnfld_points.requires_grad_()
         nonmnfld_points.requires_grad_()
         near_points.requires_grad_()
 
         # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None, mnfld_labels=mnfld_labels)
-        output_pred = net(mnfld_points, None, near_points=None, mnfld_lbls=mnfld_labels)
+        output_pred = net(mnfld_points, None, near_points=None)
 
-        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_n_gt,
+        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_labels, mnfld_n_gt, mnfld_h_gt,
                                  near_points=near_points if args.morse_near else None)
         lr = torch.tensor(optimizer.param_groups[0]['lr'])
         loss_dict["lr"] = lr

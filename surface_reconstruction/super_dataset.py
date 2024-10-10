@@ -3,6 +3,8 @@ import numpy as np
 import scipy.spatial as spatial
 import open3d as o3d
 import trimesh
+import torch
+import utils.utils as utils
 
 
 class SuperDataset(data.Dataset):
@@ -55,12 +57,12 @@ class SuperDataset(data.Dataset):
         return
 
     def __getitem__(self, index):
-        manifold_points, manifold_labels = self.get_cylinder_points(n=5)
+        manifold_points, manifold_labels, manifold_normals, manifold_hessians = self.get_cylinder_points_normals(n=1)
 
         nonmnfld_points = manifold_points
         near_points = manifold_points
 
-        return {'points': manifold_points, 'mnfld_n': manifold_points, 'nonmnfld_points': nonmnfld_points,
+        return {'points': manifold_points, 'mnfld_n': manifold_normals, 'mnfld_h': manifold_hessians, 'nonmnfld_points': nonmnfld_points,
                 'near_points': near_points, 'labels': manifold_labels}
 
     def get_train_data(self, batch_size):
@@ -124,6 +126,59 @@ class SuperDataset(data.Dataset):
         values = sdf_cylinder(points, r, h)
 
         return points, values
+    
+    def get_cylinder_points_normals(self, r=0.4, h=0.8, n=2):
 
+        def sdf_cylinder(points, radius, height):
+            # Ensure that gradients can be computed for the input points
+            points = torch.as_tensor(points, dtype=torch.float32)
+            points.requires_grad_(True)
+            
+            # Calculate the 2D distance to the z-axis (cylinder axis)
+            d_xy = torch.norm(points[:, :2], dim=1) - radius
+            
+            # Calculate the vertical distance to the top and bottom caps
+            d_z = torch.abs(points[:, 2]) - height / 2.0
+            
+            # Compute signed distances based on the different regions relative to the cylinder
+            inside_cylinder = (d_xy < 0) & (d_z < 0)
+            outside_side = (d_xy > 0) & (d_z < 0)
+            outside_caps = (d_xy < 0) & (d_z > 0)
+            outside_both = (d_xy > 0) & (d_z > 0)
+
+            # Initialize the signed distance tensor
+            distances = torch.zeros(points.shape[0], device=points.device)
+
+            # Inside the cylinder: maximum of radial and vertical distances
+            distances[inside_cylinder] = torch.maximum(d_xy[inside_cylinder], d_z[inside_cylinder])
+
+            # Outside side but within height bounds: radial distance
+            distances[outside_side] = d_xy[outside_side]
+
+            # Outside caps but within radius: vertical distance
+            distances[outside_caps] = d_z[outside_caps]
+
+            # Outside both the radius and height bounds: Euclidean distance to the corner
+            distances[outside_both] = torch.sqrt(d_xy[outside_both] ** 2 + d_z[outside_both] ** 2)
+            
+            gradients = utils.gradient(points, distances)
+            mnfld_dx = utils.gradient(points, gradients[:, 0])
+            mnfld_dy = utils.gradient(points, gradients[:, 1])
+            mnfld_dz = utils.gradient(points, gradients[:, 2])
+            hessians = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
+
+            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), hessians.detach().numpy()
+
+        # Returns points on the manifold
+        points = np.random.uniform(-self.grid_range, self.grid_range,
+                                            size=(n*self.n_points, 3)).astype(np.float32)  # (n_points, 3)
+        # center and scale data/point cloud
+        self.scale = np.max([r, h/2])
+        r /= self.scale
+        h /= self.scale
+
+        values, normals, hessians = sdf_cylinder(points, r, h)
+
+        return points, values, normals, hessians
     def __len__(self):
         return self.n_samples

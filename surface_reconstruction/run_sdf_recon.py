@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     # data process
     n_points = 15000  # points number
-    n_samples = 20000  # iterations number
+    n_samples = 100  # iterations number
     batch_size = 1
     grid_res = 256  # mc resolution
     # network
@@ -19,9 +19,9 @@ if __name__ == '__main__':
     # loss
     # loss_type = 'siren_wo_n_w_morse'
     loss_type = 'siren_supervised'
-    loss_weights = (7e3, 6e2, 10, 5e1, 0, 3)
+    loss_weights = (0, 0, 100, 0, 0, 0)
     morse_type = 'l1'
-    morse_decay = 'linear'  # 'linear' | 'quintic' | 'step'
+    morse_decay = 'none'  # 'linear' | 'quintic' | 'step'
     decay_params = (3, 0.2, 3, 0.4, 0.001, 0.0001)
     # opt
     lr = 5e-5
