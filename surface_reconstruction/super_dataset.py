@@ -172,7 +172,19 @@ class SuperDataset(data.Dataset):
             P = torch.eye(3).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
             S = P @ hessians @ P
 
-            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), S.detach().numpy()
+            S = S.reshape((-1,9))
+            dS0 = utils.gradient(points, S[:, :, 0])
+            dS1 = utils.gradient(points, S[:, :, 1])
+            dS2 = utils.gradient(points, S[:, :, 2])
+            dS3 = utils.gradient(points, S[:, :, 3])
+            dS4 = utils.gradient(points, S[:, :, 4])
+            dS5 = utils.gradient(points, S[:, :, 5])
+            dS6 = utils.gradient(points, S[:, :, 6])
+            dS7 = utils.gradient(points, S[:, :, 7])
+            dS8 = utils.gradient(points, S[:, :, 8])
+            dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
+
+            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), dS.detach().numpy()
 
         # Returns points on the manifold
         points = np.random.uniform(-self.grid_range, self.grid_range,

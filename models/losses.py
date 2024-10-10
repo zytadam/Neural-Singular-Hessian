@@ -323,6 +323,20 @@ class SuperLoss(nn.Module):
             # grad_norm = torch.norm(mnfld_grad, dim=2, keepdim=True) + 1e-12
             P = torch.eye(3, device=device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
             S = P @ mnfld_hessian @ P
+
+            b, n, _, _ = S.shape
+            S = S.view((b,n,9))
+            dS0 = utils.gradient(nonmnfld_points, S[:, :, 0])
+            dS1 = utils.gradient(nonmnfld_points, S[:, :, 1])
+            dS2 = utils.gradient(nonmnfld_points, S[:, :, 2])
+            dS3 = utils.gradient(nonmnfld_points, S[:, :, 3])
+            dS4 = utils.gradient(nonmnfld_points, S[:, :, 4])
+            dS5 = utils.gradient(nonmnfld_points, S[:, :, 5])
+            dS6 = utils.gradient(nonmnfld_points, S[:, :, 6])
+            dS7 = utils.gradient(nonmnfld_points, S[:, :, 7])
+            dS8 = utils.gradient(nonmnfld_points, S[:, :, 8])
+            dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
+
             hessian_term = torch.linalg.matrix_norm(S - mnfld_h_gt).mean()
             # print(hessian_term)
 
