@@ -167,7 +167,12 @@ class SuperDataset(data.Dataset):
             mnfld_dz = utils.gradient(points, gradients[:, 2])
             hessians = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
 
-            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), hessians.detach().numpy()
+            n_hat = torch.nn.functional.normalize(gradients, dim=-1)
+            # grad_norm = torch.norm(gradients, dim=1, keepdim=True) + 1e-12
+            P = torch.eye(3).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
+            S = P @ hessians @ P
+
+            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), S.detach().numpy()
 
         # Returns points on the manifold
         points = np.random.uniform(-self.grid_range, self.grid_range,
