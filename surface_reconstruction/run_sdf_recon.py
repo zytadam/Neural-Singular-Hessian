@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # loss
     # loss_type = 'siren_wo_n_w_morse'
     loss_type = 'siren_supervised'
-    loss_weights = (0, 0, 100, 0, 0, 0)
+    loss_weights = (7e3, 0, 0, 0, 0, 0)
     morse_type = 'l1'
     morse_decay = 'none'  # 'linear' | 'quintic' | 'step'
     decay_params = (3, 0.2, 3, 0.4, 0.001, 0.0001)

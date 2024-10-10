@@ -57,13 +57,16 @@ class SuperDataset(data.Dataset):
         return
 
     def __getitem__(self, index):
-        manifold_points, manifold_labels, manifold_normals, manifold_hessians = self.get_cylinder_points_normals(n=1)
+        manifold_points, manifold_values, manifold_normals, manifold_hessians = self.get_cylinder_points_normals(n=1, iso=False)
 
-        nonmnfld_points = manifold_points
+        nonmnfld_points = np.random.uniform(-self.grid_range, self.grid_range,
+                                            size=(self.n_points, 3)).astype(np.float32)  # (n_points, 3)
         near_points = manifold_points
 
-        return {'points': manifold_points, 'mnfld_n': manifold_normals, 'mnfld_h': manifold_hessians, 'nonmnfld_points': nonmnfld_points,
-                'near_points': near_points, 'labels': manifold_labels}
+        # return {'points': manifold_points, 'mnfld_v': manifold_values, 'mnfld_n': manifold_normals, 'mnfld_h': manifold_hessians, 'nonmnfld_points': nonmnfld_points,
+        #         'near_points': near_points}
+        return {'points': manifold_points, 'mnfld_v': manifold_values, 'nonmnfld_points': nonmnfld_points,
+                'near_points': near_points}
 
     def get_train_data(self, batch_size):
         manifold_idxes_permutation = np.random.permutation(self.points.shape[0])
@@ -127,7 +130,7 @@ class SuperDataset(data.Dataset):
 
         return points, values
     
-    def get_cylinder_points_normals(self, r=0.4, h=0.8, n=2):
+    def get_cylinder_points_normals(self, r=0.4, h=0.8, n=1, iso=False):
 
         def sdf_cylinder(points, radius, height):
             # Ensure that gradients can be computed for the input points
@@ -187,8 +190,12 @@ class SuperDataset(data.Dataset):
             return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), dS.detach().numpy()
 
         # Returns points on the manifold
-        points = np.random.uniform(-self.grid_range, self.grid_range,
+        if iso:
+            points = self.sample_isosurface(n*self.n_points, eps=0.02)
+        else:
+            points = np.random.uniform(-self.grid_range, self.grid_range,
                                             size=(n*self.n_points, 3)).astype(np.float32)  # (n_points, 3)
+
         # center and scale data/point cloud
         self.scale = np.max([r, h/2])
         r /= self.scale
@@ -203,5 +210,22 @@ class SuperDataset(data.Dataset):
     def set_model(self, model):
         self.model = model
 
-    def sample_isosurface(self, n):
-        pass
+    def sample_isosurface(self, num, eps):
+        net = self.model
+        device = torch.device("cuda:0")
+        net.eval()
+        with torch.no_grad():
+            sample_list = []
+            sample_number = 0
+            
+            while sample_number < num:
+                points = 2*self.grid_range * torch.rand(num, 3, device=device) - self.grid_range
+                preds = net(points)["nonmanifold_pnts_pred"]
+                mask = torch.abs(preds).squeeze(-1) < eps
+                samples = points[mask]
+                sample_list.append(samples)
+                sample_number += samples.shape[0]
+
+            s_points = torch.cat(sample_list, dim=0)[:num]
+
+        return s_points.detach().cpu().numpy()

@@ -286,7 +286,8 @@ class SuperLoss(nn.Module):
         # Compute required terms
         #########################################
 
-        manifold_pred = output_pred["nonmanifold_pnts_pred"]
+        nonmanifold_pred = output_pred["nonmanifold_pnts_pred"]
+        manifold_pred = output_pred["manifold_pnts_pred"]
         latent_reg = output_pred["latent_reg"]
 
         # compute gradients for div (divergence), curl and curv (curvature)
@@ -340,7 +341,14 @@ class SuperLoss(nn.Module):
             hessian_term = (torch.linalg.matrix_norm(dS - mnfld_h_gt)**2).mean()
             # print(hessian_term)
 
-        inter_term = eikonal_term = smooth_term = torch.tensor(0.0)
+        nonmnfld_grad = utils.gradient(mnfld_points, manifold_pred)
+        nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
+        nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
+        nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
+        nonmnfld_hessian = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
+        smooth_term = torch.mean(torch.linalg.matrix_norm(nonmnfld_hessian)**2)
+
+        inter_term = eikonal_term = torch.tensor(0.0)
 
         #########################################
         # Losses

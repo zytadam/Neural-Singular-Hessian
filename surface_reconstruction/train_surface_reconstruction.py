@@ -108,8 +108,8 @@ for epoch in range(args.num_epochs):
 
         
 
-        mnfld_points, mnfld_n_gt, nonmnfld_points, near_points, mnfld_labels, mnfld_h_gt = data['points'].to(device), data['mnfld_n'].to(device), \
-            data['nonmnfld_points'].to(device), data['near_points'].to(device), data['labels'].to(device), data['mnfld_h'].to(device)
+        mnfld_points, mnfld_n_gt, nonmnfld_points, near_points, mnfld_v_gt, mnfld_h_gt = data['points'].to(device), data['mnfld_n'].to(device), \
+            data['nonmnfld_points'].to(device), data['near_points'].to(device), data['mnfld_v'].to(device), data['mnfld_h'].to(device)
         # print(mnfld_h_gt.shape)
         mnfld_points.requires_grad_()
         nonmnfld_points.requires_grad_()
@@ -118,10 +118,10 @@ for epoch in range(args.num_epochs):
         net.zero_grad()
         net.train()
 
-        # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None, mnfld_labels=mnfld_labels)
-        output_pred = net(mnfld_points, None, near_points=None)
+        # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
+        output_pred = net(nonmnfld_points, mnfld_points, near_points=None)
 
-        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_labels, mnfld_n_gt, mnfld_h_gt,
+        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_v_gt, mnfld_n_gt, mnfld_h_gt,
                                  near_points=near_points if args.morse_near else None)
         lr = torch.tensor(optimizer.param_groups[0]['lr'])
         loss_dict["lr"] = lr
