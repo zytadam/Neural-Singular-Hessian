@@ -341,7 +341,7 @@ class SuperLoss(nn.Module):
             hessian_term = (torch.linalg.matrix_norm(dS - mnfld_h_gt)**2).mean()
             # print(hessian_term)
 
-        nonmnfld_grad = utils.gradient(mnfld_points, manifold_pred)
+        nonmnfld_grad = utils.gradient(nonmnfld_points, nonmanifold_pred)
         nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
         nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
         nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
@@ -362,7 +362,7 @@ class SuperLoss(nn.Module):
         # else:
         #     print(self.loss_type)
         #     raise Warning("unrecognized loss type")
-        loss = self.weights[0] * sdf_term + self.weights[1] * normal_term + self.weights[2] * hessian_term
+        loss = self.weights[0] * sdf_term + self.weights[1] * normal_term + self.weights[2] * hessian_term + self.weights[5] * smooth_term
 
         # If multiple surface reconstruction, then latent and latent_reg are defined so reg_term need to be used
         if latent_reg is not None:
@@ -370,7 +370,7 @@ class SuperLoss(nn.Module):
 
         return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
                 'eikonal_term': eikonal_term, 'normals_loss': hessian_term, 'div_loss': div_loss,
-                'curv_loss': curv_term.mean(), 'morse_term': morse_loss}, mnfld_grad
+                'curv_loss': curv_term.mean(), 'morse_term': smooth_term}, mnfld_grad
     
     def update_morse_weight(self, current_iteration, n_iterations, params=None):
         # `params`` should be (start_weight, *optional middle, end_weight) where optional middle is of the form [percent, value]*

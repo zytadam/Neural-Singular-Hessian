@@ -121,7 +121,7 @@ for epoch in range(args.num_epochs):
         # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
         output_pred = net(nonmnfld_points, mnfld_points, near_points=None)
 
-        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_v_gt, mnfld_n_gt, mnfld_h_gt,
+        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_v_gt, mnfld_n_gt=None, mnfld_h_gt=None,
                                  near_points=near_points if args.morse_near else None)
         lr = torch.tensor(optimizer.param_groups[0]['lr'])
         loss_dict["lr"] = lr

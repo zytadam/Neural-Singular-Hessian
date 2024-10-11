@@ -63,10 +63,10 @@ class SuperDataset(data.Dataset):
                                             size=(self.n_points, 3)).astype(np.float32)  # (n_points, 3)
         near_points = manifold_points
 
-        # return {'points': manifold_points, 'mnfld_v': manifold_values, 'mnfld_n': manifold_normals, 'mnfld_h': manifold_hessians, 'nonmnfld_points': nonmnfld_points,
-        #         'near_points': near_points}
-        return {'points': manifold_points, 'mnfld_v': manifold_values, 'nonmnfld_points': nonmnfld_points,
+        return {'points': manifold_points, 'mnfld_v': manifold_values, 'mnfld_n': manifold_normals, 'mnfld_h': manifold_hessians, 'nonmnfld_points': nonmnfld_points,
                 'near_points': near_points}
+        # return {'points': manifold_points, 'mnfld_v': manifold_values, 'nonmnfld_points': nonmnfld_points,
+        #         'near_points': near_points}
 
     def get_train_data(self, batch_size):
         manifold_idxes_permutation = np.random.permutation(self.points.shape[0])
