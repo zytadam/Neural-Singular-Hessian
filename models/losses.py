@@ -320,35 +320,40 @@ class SuperLoss(nn.Module):
             mnfld_dy = utils.gradient(mnfld_points, mnfld_grad[:, :, 1])
             mnfld_dz = utils.gradient(mnfld_points, mnfld_grad[:, :, 2])
             mnfld_hessian = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
-            n_hat = torch.nn.functional.normalize(mnfld_grad, dim=-1)
-            # grad_norm = torch.norm(mnfld_grad, dim=2, keepdim=True) + 1e-12
-            P = torch.eye(3, device=device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
-            S = P @ mnfld_hessian @ P
+            hessian_term = (torch.linalg.matrix_norm(mnfld_hessian - mnfld_h_gt)**2).mean()
 
-            b, n, _, _ = S.shape
-            S = S.view((b,n,9))
-            dS0 = utils.gradient(mnfld_points, S[:, :, 0])
-            dS1 = utils.gradient(mnfld_points, S[:, :, 1])
-            dS2 = utils.gradient(mnfld_points, S[:, :, 2])
-            dS3 = utils.gradient(mnfld_points, S[:, :, 3])
-            dS4 = utils.gradient(mnfld_points, S[:, :, 4])
-            dS5 = utils.gradient(mnfld_points, S[:, :, 5])
-            dS6 = utils.gradient(mnfld_points, S[:, :, 6])
-            dS7 = utils.gradient(mnfld_points, S[:, :, 7])
-            dS8 = utils.gradient(mnfld_points, S[:, :, 8])
-            dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
+            # n_hat = torch.nn.functional.normalize(mnfld_grad, dim=-1)
+            # P = torch.eye(3, device=device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
+            # S = P @ mnfld_hessian @ P
+            # # hessian_term = (torch.linalg.matrix_norm(S - mnfld_h_gt)**2).mean()
 
-            hessian_term = (torch.linalg.matrix_norm(dS - mnfld_h_gt)**2).mean()
+            # b, n, _, _ = S.shape
+            # S = S.view((b,n,9))
+            # dS0 = utils.gradient(mnfld_points, S[:, :, 0])
+            # dS1 = utils.gradient(mnfld_points, S[:, :, 1])
+            # dS2 = utils.gradient(mnfld_points, S[:, :, 2])
+            # dS3 = utils.gradient(mnfld_points, S[:, :, 3])
+            # dS4 = utils.gradient(mnfld_points, S[:, :, 4])
+            # dS5 = utils.gradient(mnfld_points, S[:, :, 5])
+            # dS6 = utils.gradient(mnfld_points, S[:, :, 6])
+            # dS7 = utils.gradient(mnfld_points, S[:, :, 7])
+            # dS8 = utils.gradient(mnfld_points, S[:, :, 8])
+            # dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
+
+            # hessian_term = (torch.linalg.matrix_norm(dS - mnfld_h_gt)**2).mean()
             # print(hessian_term)
 
-        nonmnfld_grad = utils.gradient(nonmnfld_points, nonmanifold_pred)
-        nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
-        nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
-        nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
-        nonmnfld_hessian = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
-        smooth_term = torch.mean(torch.linalg.matrix_norm(nonmnfld_hessian)**2)
+        # nonmnfld_grad = utils.gradient(nonmnfld_points, nonmanifold_pred)
+        # nonmnfld_dx = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 0])
+        # nonmnfld_dy = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 1])
+        # nonmnfld_dz = utils.gradient(nonmnfld_points, nonmnfld_grad[:, :, 2])
+        # nonmnfld_hessian = torch.stack((nonmnfld_dx, nonmnfld_dy, nonmnfld_dz), dim=-1)
+        # smooth_term = torch.linalg.matrix_norm(nonmnfld_hessian)**2
+        # dist = nonmanifold_pred.detach()
+        # smooth_term = torch.exp(-1e2 * torch.abs(dist)) * smooth_term.unsqueeze(-1)
+        # smooth_term = torch.mean(smooth_term)
 
-        inter_term = eikonal_term = torch.tensor(0.0)
+        inter_term = eikonal_term = smooth_term = torch.tensor(0.0)
 
         #########################################
         # Losses
@@ -368,7 +373,7 @@ class SuperLoss(nn.Module):
         if latent_reg is not None:
             loss += self.weights[6] * latent_reg_term
 
-        return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': inter_term, 'latent_reg_term': latent_reg_term,
+        return {"loss": loss, 'sdf_term': sdf_term, 'inter_term': normal_term, 'latent_reg_term': latent_reg_term,
                 'eikonal_term': eikonal_term, 'normals_loss': hessian_term, 'div_loss': div_loss,
                 'curv_loss': curv_term.mean(), 'morse_term': smooth_term}, mnfld_grad
     

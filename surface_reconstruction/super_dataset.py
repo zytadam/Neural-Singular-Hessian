@@ -86,49 +86,6 @@ class SuperDataset(data.Dataset):
         sigmas = dist[:, -1:]
         self.sigmas = sigmas
 
-    def get_cylinder_points(self, r=0.4, h=0.8, n=2):
-
-        def sdf_cylinder(points, radius, height):
-            # Calculate the 2D distance to the z-axis (cylinder axis)
-            d_xy = np.linalg.norm(points[:, :2], axis=1) - radius
-            
-            # Calculate the vertical distance to the top and bottom caps
-            d_z = np.abs(points[:, 2]) - height / 2.0
-            
-            # Compute signed distances based on the different regions relative to the cylinder
-            inside_cylinder = (d_xy < 0) & (d_z < 0)
-            outside_side = (d_xy > 0) & (d_z < 0)
-            outside_caps = (d_xy < 0) & (d_z > 0)
-            outside_both = (d_xy > 0) & (d_z > 0)
-
-            # Initialize the signed distance array
-            distances = np.zeros(points.shape[0], dtype=np.float32)
-
-            # Inside the cylinder: maximum of radial and vertical distances
-            distances[inside_cylinder] = np.maximum(d_xy[inside_cylinder], d_z[inside_cylinder])
-
-            # Outside side but within height bounds: radial distance
-            distances[outside_side] = d_xy[outside_side]
-
-            # Outside caps but within radius: vertical distance
-            distances[outside_caps] = d_z[outside_caps]
-
-            # Outside both the radius and height bounds: Euclidean distance to the corner
-            distances[outside_both] = np.sqrt(d_xy[outside_both] ** 2 + d_z[outside_both] ** 2)
-            
-            return distances
-
-        # Returns points on the manifold
-        points = np.random.uniform(-self.grid_range, self.grid_range,
-                                            size=(n*self.n_points, 3)).astype(np.float32)  # (n_points, 3)
-        # center and scale data/point cloud
-        self.scale = np.max([r, h/2])
-        r /= self.scale
-        h /= self.scale
-
-        values = sdf_cylinder(points, r, h)
-
-        return points, values
     
     def get_cylinder_points_normals(self, r=0.4, h=0.8, n=1, iso=False):
 
@@ -170,24 +127,24 @@ class SuperDataset(data.Dataset):
             mnfld_dz = utils.gradient(points, gradients[:, 2])
             hessians = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
 
-            n_hat = torch.nn.functional.normalize(gradients, dim=-1)
-            # grad_norm = torch.norm(gradients, dim=1, keepdim=True) + 1e-12
-            P = torch.eye(3).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
-            S = P @ hessians @ P
+            # n_hat = torch.nn.functional.normalize(gradients, dim=-1)
+            # # grad_norm = torch.norm(gradients, dim=1, keepdim=True) + 1e-12
+            # P = torch.eye(3).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
+            # S = P @ hessians @ P
 
-            S = S.reshape((-1,9))
-            dS0 = utils.gradient(points, S[:, 0])
-            dS1 = utils.gradient(points, S[:, 1])
-            dS2 = utils.gradient(points, S[:, 2])
-            dS3 = utils.gradient(points, S[:, 3])
-            dS4 = utils.gradient(points, S[:, 4])
-            dS5 = utils.gradient(points, S[:, 5])
-            dS6 = utils.gradient(points, S[:, 6])
-            dS7 = utils.gradient(points, S[:, 7])
-            dS8 = utils.gradient(points, S[:, 8])
-            dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
+            # S = S.reshape((-1,9))
+            # dS0 = utils.gradient(points, S[:, 0])
+            # dS1 = utils.gradient(points, S[:, 1])
+            # dS2 = utils.gradient(points, S[:, 2])
+            # dS3 = utils.gradient(points, S[:, 3])
+            # dS4 = utils.gradient(points, S[:, 4])
+            # dS5 = utils.gradient(points, S[:, 5])
+            # dS6 = utils.gradient(points, S[:, 6])
+            # dS7 = utils.gradient(points, S[:, 7])
+            # dS8 = utils.gradient(points, S[:, 8])
+            # dS = torch.stack((dS0, dS1, dS2, dS3, dS4, dS5, dS6, dS7, dS8), dim=-1)
 
-            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), dS.detach().numpy()
+            return distances.unsqueeze(-1).detach().numpy(), gradients.detach().numpy(), hessians.detach().numpy()
 
         # Returns points on the manifold
         if iso:
