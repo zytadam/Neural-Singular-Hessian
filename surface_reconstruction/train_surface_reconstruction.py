@@ -71,40 +71,41 @@ for epoch in range(args.num_epochs):
     # For each batch in the dataloader
     for batch_idx, data in enumerate(train_dataloader):
         if (batch_idx % 500 == 0 or batch_idx == len(train_dataloader) - 1):
-            output_dir = os.path.join(logdir, 'vis')
-            os.makedirs(output_dir, exist_ok=True)
-            vis.plot_cuts_iso(net.decoder, save_path=os.path.join(output_dir, str(batch_idx) + '.html'))
             torch.save(net.state_dict(), os.path.join(model_outdir, str(batch_idx) + '.pth'))
-            try:
-                shapename = file_name
-                output_dir = os.path.join(logdir, 'result_meshes')
-                os.makedirs(output_dir, exist_ok=True)
-                cp, scale, bbox = train_set.cp, train_set.scale, train_set.bbox
-                mesh_dict = None
-                if args.udf:
-                    res_dict = utils.udf2mesh(net.decoder, None,
-                                              args.grid_res,
-                                              translate=-cp,
-                                              scale=1 / scale,
-                                              get_mesh=True, device=device, bbox=bbox)
-                    mesh = res_dict['mesh']
-                    mesh = utils.normalize_mesh_export(mesh)
-                else:
-                    mesh = utils.implicit2mesh(net.decoder, None,
-                                               args.grid_res,
-                                               translate=-cp,
-                                               scale=1 / scale,
-                                               get_mesh=True, device=device, bbox=bbox)
 
-                pred_mesh = mesh.copy()
-                output_ply_filepath = os.path.join(output_dir,
-                                                   shapename + '_iter_{}.ply'.format(batch_idx))
+            # output_dir = os.path.join(logdir, 'vis')
+            # os.makedirs(output_dir, exist_ok=True)
+            # vis.plot_cuts_iso(net.decoder, save_path=os.path.join(output_dir, str(batch_idx) + '.html'))
+            # try:
+            #     shapename = file_name
+            #     output_dir = os.path.join(logdir, 'result_meshes')
+            #     os.makedirs(output_dir, exist_ok=True)
+            #     cp, scale, bbox = train_set.cp, train_set.scale, train_set.bbox
+            #     mesh_dict = None
+            #     if args.udf:
+            #         res_dict = utils.udf2mesh(net.decoder, None,
+            #                                   args.grid_res,
+            #                                   translate=-cp,
+            #                                   scale=1 / scale,
+            #                                   get_mesh=True, device=device, bbox=bbox)
+            #         mesh = res_dict['mesh']
+            #         mesh = utils.normalize_mesh_export(mesh)
+            #     else:
+            #         mesh = utils.implicit2mesh(net.decoder, None,
+            #                                    args.grid_res,
+            #                                    translate=-cp,
+            #                                    scale=1 / scale,
+            #                                    get_mesh=True, device=device, bbox=bbox)
 
-                print('Saving to ', output_ply_filepath)
-                mesh.export(output_ply_filepath)
-            except Exception as e:
-                print(e)
-                print('Could not generate mesh\n')
+            #     pred_mesh = mesh.copy()
+            #     output_ply_filepath = os.path.join(output_dir,
+            #                                        shapename + '_iter_{}.ply'.format(batch_idx))
+
+            #     print('Saving to ', output_ply_filepath)
+            #     mesh.export(output_ply_filepath)
+            # except Exception as e:
+            #     print(e)
+            #     print('Could not generate mesh\n')
 
         
 
@@ -121,7 +122,7 @@ for epoch in range(args.num_epochs):
         # output_pred = net(nonmnfld_points, mnfld_points, near_points=near_points if args.morse_near else None)
         output_pred = net(nonmnfld_points, mnfld_points, near_points=None)
 
-        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_v_gt, mnfld_n_gt=None, mnfld_h_gt=mnfld_h_gt,
+        loss_dict, _ = criterion(output_pred, mnfld_points, nonmnfld_points, mnfld_v_gt, mnfld_n_gt=mnfld_n_gt, mnfld_h_gt=None,
                                  near_points=near_points if args.morse_near else None)
         lr = torch.tensor(optimizer.param_groups[0]['lr'])
         loss_dict["lr"] = lr

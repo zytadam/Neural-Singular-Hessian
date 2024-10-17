@@ -133,7 +133,7 @@ class Network(nn.Module):
 
         self.init_type = init_type
         self.decoder = Decoder(udf=udf)
-        self.decoder.fc_block = FCBlock(in_dim, 1, num_hidden_layers=decoder_n_hidden_layers,
+        self.decoder.fc_block = FCBlock(in_dim, 3, num_hidden_layers=decoder_n_hidden_layers,
                                         hidden_features=decoder_hidden_dim,
                                         outermost_linear=True, nonlinearity=nl, init_type=init_type,
                                         sphere_init_params=sphere_init_params)  # SIREN decoder

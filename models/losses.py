@@ -290,12 +290,6 @@ class SuperLoss(nn.Module):
         manifold_pred = output_pred["manifold_pnts_pred"]
         latent_reg = output_pred["latent_reg"]
 
-        # compute gradients for div (divergence), curl and curv (curvature)
-        if manifold_pred is not None:
-            mnfld_grad = utils.gradient(mnfld_points, manifold_pred)
-        else:
-            mnfld_grad = None
-
         div_loss = torch.tensor([0.0], device=mnfld_points.device)
         morse_loss = torch.tensor([0.0], device=mnfld_points.device)
         curv_term = torch.tensor([0.0], device=mnfld_points.device)
@@ -303,24 +297,20 @@ class SuperLoss(nn.Module):
         normal_term = torch.tensor([0.0], device=mnfld_points.device)
         hessian_term = torch.tensor([0.0], device=mnfld_points.device)
 
-        # latent regulariation for multiple shape learning
-        latent_reg_term = latent_rg_loss(latent_reg, device)
-
-        # signed distance function term
-        sdf_term = torch.nn.MSELoss()(manifold_pred, mnfld_gt)
+        mnfld_grad = manifold_pred
 
         # normal term
         if mnfld_n_gt is not None:
-            normal_term = ((mnfld_grad - mnfld_n_gt).abs()).norm(2, dim=-1).mean()
+            normal_term = torch.mean((manifold_pred - mnfld_n_gt).norm(2, dim=-1)**2)
             # normal_term = (
             #         1 - torch.abs(torch.nn.functional.cosine_similarity(mnfld_grad, mnfld_n_gt, dim=-1))).mean()
 
-        if mnfld_h_gt is not None:
-            mnfld_dx = utils.gradient(mnfld_points, mnfld_grad[:, :, 0])
-            mnfld_dy = utils.gradient(mnfld_points, mnfld_grad[:, :, 1])
-            mnfld_dz = utils.gradient(mnfld_points, mnfld_grad[:, :, 2])
-            mnfld_hessian = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
-            hessian_term = (torch.linalg.matrix_norm(mnfld_hessian - mnfld_h_gt)**2).mean()
+        # if mnfld_h_gt is not None:
+        #     mnfld_dx = utils.gradient(mnfld_points, mnfld_grad[:, :, 0])
+        #     mnfld_dy = utils.gradient(mnfld_points, mnfld_grad[:, :, 1])
+        #     mnfld_dz = utils.gradient(mnfld_points, mnfld_grad[:, :, 2])
+        #     mnfld_hessian = torch.stack((mnfld_dx, mnfld_dy, mnfld_dz), dim=-1)
+        #     hessian_term = (torch.linalg.matrix_norm(mnfld_hessian - mnfld_h_gt)**2).mean()
 
             # n_hat = torch.nn.functional.normalize(mnfld_grad, dim=-1)
             # P = torch.eye(3, device=device).unsqueeze(0).unsqueeze(0) - n_hat.unsqueeze(-1) * n_hat.unsqueeze(-2)
@@ -353,7 +343,7 @@ class SuperLoss(nn.Module):
         # smooth_term = torch.exp(-1e2 * torch.abs(dist)) * smooth_term.unsqueeze(-1)
         # smooth_term = torch.mean(smooth_term)
 
-        inter_term = eikonal_term = smooth_term = torch.tensor(0.0)
+        sdf_term = inter_term = eikonal_term = smooth_term = torch.tensor(0.0)
 
         #########################################
         # Losses
